@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>S3 File Manager</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+        .btn-primary, .btn-success {
+            border-radius: 20px;
+        }
+        #fileList li {
+            border: none;
+        }
+        #fileList a {
+            color: #007bff;
+        }
+        #fileList a:hover {
+            text-decoration: none;
+            color: #0056b3;
+        }
+        .fa-trash-alt {
+            color: #dc3545;
+        }
+        .drag-area {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: background-color 0.3s;
+        }
+        .drag-area.drag-over {
+            background-color: #e9ecef;
+        }
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .section-header h2 {
+            margin-bottom: 0;
+            font-weight: bold;
+            font-size: 1.75rem;
+            color: #007bff;
+        }
+        .health-icon {
+            cursor: pointer;
+            color: #28a745;
+            margin-right: 10px;
+        }
+        .refresh-icon {
+            cursor: pointer;
+            color: #007bff;
+        }
+        .refresh-icon:hover {
+            color: #0056b3;
+        }
+        .section-content {
+            margin-bottom: 40px;
+        }
+        .refresh-icon {
+    cursor: pointer;
+    color: orange; /* Changed to orange */
+    margin-left: 10px; /* Added margin for spacing */
+}
+
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1 class="mt-5 text-center">S3 File Manager</h1>
+
+    <!-- Health Check -->
+    <div class="section-content">
+        <div class="section-header">
+            <h2><i class="fas fa-heartbeat health-icon" onclick="checkHealth()" title="Check Health"></i> Service Health</h2>
+        </div>
+        <p id="healthStatus"></p>
+    </div>
+
+    <!-- Upload File Form and File List Side by Side -->
+    <div class="row section-content">
+        <!-- Upload File Form -->
+        <div class="col-md-6">
+            <div class="section-header">
+                <h2>Upload File</h2>
+            </div>
+            <div class="drag-area" id="dragArea">
+                <p>Drag & Drop to Upload File</p>
+                <span>or</span>
+                <br>
+                <input type="file" id="fileInput" hidden>
+                <button class="btn btn-primary mt-2" id="browseFileBtn">Browse File</button>
+            </div>
+            <p id="uploadResponse"></p>
+        </div>
+
+        <!-- File List -->
+        <div class="col-md-6">
+            <div class="section-header">
+                <h2>Files in S3 <i class="fas fa-sync-alt refresh-icon orange-icon" onclick="listFiles()" title="Refresh List"></i></h2>
+            </div>
+            <ul id="fileList" class="list-group mt-3"></ul>
+        </div>
+
+
+
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script>
+    function checkHealth() {
+        fetch('/api/v1')
+            .then(response => response.text())
+            .then(status => {
+                document.getElementById('healthStatus').innerText = 'Service is ' + status;
+            })
+            .catch(error => {
+                document.getElementById('healthStatus').innerText = 'Error checking health: ' + error;
+            });
+    }
+
+    function uploadFile(file) {
+        var formData = new FormData();
+        formData.append('file', file);
+
+        $.ajax({
+            url: '/api/v1/upload',
+            type: 'POST',
+            data: formData,
+            contentType: false,
+            processData: false,
+            success: function(response) {
+                $('#uploadResponse').text(response);
+                listFiles(); // Refresh file list after upload
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                $('#uploadResponse').text('Error uploading file: ' + errorThrown);
+            }
+        });
+    }
+
+    function listFiles() {
+        $.ajax({
+            url: '/api/v1/files',
+            type: 'GET',
+            success: function(files) {
+                var fileList = $('#fileList');
+                fileList.empty();
+                files.forEach(function(file) {
+                    var listItem = $('<li>').addClass('list-group-item');
+                    var downloadLink = $('<a>')
+                        .attr('href', '/api/v1/download/' + file)
+                        .text(file);
+                    var deleteIcon = $('<i>')
+                        .addClass('fas fa-trash-alt ml-2')
+                        .css('cursor', 'pointer')
+                        .click(function() {
+                            deleteFile(file);
+                        });
+                    listItem.append(downloadLink);
+                    listItem.append(deleteIcon);
+                    fileList.append(listItem);
+                });
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                alert('Error listing files: ' + errorThrown);
+            }
+        });
+    }
+
+    function deleteFile(fileName) {
+        if (confirm('Are you sure you want to delete ' + fileName + '?')) {
+            $.ajax({
+                url: '/api/v1/delete/' + fileName,
+                type: 'DELETE',
+                success: function(response) {
+                    alert(response);
+                    listFiles(); // Refresh file list after deletion
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    alert('Error deleting file: ' + errorThrown);
+                }
+            });
+        }
+    }
+
+    $(document).ready(function() {
+        listFiles(); // Load file list on page load
+
+        const dragArea = document.getElementById('dragArea');
+        const fileInput = document.getElementById('fileInput');
+        const browseFileBtn = document.getElementById('browseFileBtn');
+
+        browseFileBtn.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                uploadFile(file);
+            }
+        });
+
+        dragArea.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dragArea.classList.add('drag-over');
+        });
+
+        dragArea.addEventListener('dragleave', () => {
+            dragArea.classList.remove('drag-over');
+        });
+
+        dragArea.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dragArea.classList.remove('drag-over');
+            const file = event.dataTransfer.files[0];
+            if (file) {
+                uploadFile(file);
+            }
+        });
+    });
+</script>
+</body>
+</html>
